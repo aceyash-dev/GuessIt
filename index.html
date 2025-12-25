@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<meta name="theme-color" content="#0f172a"><title>Guess It! v1.3.41E</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@300;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+/* --- VARS --- */
+:root{--bg:#f8fafc;--card:rgba(255,255,255,0.9);--border:rgba(99,102,241,0.15);--text:#0f172a;--text-muted:#64748b;--primary:#4f46e5;--primary-glow:rgba(79,70,229,0.3);--accent:#f43f5e;--gold:#f59e0b;--gem:#0ea5e9;--font-head:'Space Grotesk',sans-serif;--font-body:'Outfit',sans-serif;--modal-bg:rgba(255,255,255,0.98);--input-bg:#f1f5f9;--dock-bg:rgba(255,255,255,0.95);--success:#10b981;--error:#ef4444}
+body.dark-mode{--bg:#020617;--card:rgba(30,41,59,0.9);--border:rgba(99,102,241,0.3);--text:#f8fafc;--text-muted:#94a3b8;--input-bg:rgba(255,255,255,0.05);--modal-bg:rgba(15,23,42,0.98);--dock-bg:rgba(15,23,42,0.95)}
+body[data-theme="Gold"]{--bg:#281c04;--card:rgba(60,40,10,0.95);--primary:#d97706;--border:#fcd34d;--text:#fff}
+body[data-theme="DarkKnight"]{--bg:#000;--card:rgba(20,20,20,0.95);--primary:#333;--accent:#fff;--text:#eee;--border:#444}
+body[data-theme="Matrix"]{--bg:#000;--card:rgba(0,20,0,0.9);--primary:#0f0;--text:#0f0;--text-muted:#080;--border:#040;--accent:#fff;font-family:monospace}
+body[data-theme="CottonCandy"]{--bg:#fff0f5;--card:rgba(255,255,255,0.85);--primary:#ff69b4;--accent:#87ceeb;--text:#555;--border:#ffb6c1}
+
+/* --- BASE --- */
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--font-body);user-select:none;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:14px;transition:background .4s ease,color .4s ease;position:relative}
+.bg-fx{position:fixed;inset:0;z-index:-1;background:radial-gradient(circle at 50% 0,var(--primary-glow) 0,transparent 60%);opacity:.6;pointer-events:none}
+
+/* --- ANIMATIONS --- */
+@keyframes popIn{0%{opacity:0;transform:scale(.9) translateY(10px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+.stagger-anim > * { opacity: 0; animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.stagger-anim > *:nth-child(1) { animation-delay: 0.05s; } .stagger-anim > *:nth-child(2) { animation-delay: 0.1s; } .stagger-anim > *:nth-child(3) { animation-delay: 0.15s; }
+
+/* --- SPLASH CUBE --- */
+.splash{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#000,#4338ca,#be185d,#000);background-size:400% 400%;animation:rgbGlow 8s ease infinite;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s}
+.splash.hidden{opacity:0;pointer-events:none}
+@keyframes rgbGlow{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}
+.cube-wrap{perspective:800px;width:60px;height:60px;margin-bottom:30px}
+.cube{width:100%;height:100%;transform-style:preserve-3d;animation:spin 6s infinite linear}
+.face{position:absolute;width:60px;height:60px;background:rgba(255,255,255,.1);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;backface-visibility:visible}
+.f1{transform:translateZ(30px)}.f2{transform:rotateY(180deg) translateZ(30px)}.f3{transform:rotateY(90deg) translateZ(30px)}.f4{transform:rotateY(-90deg) translateZ(30px)}.f5{transform:rotateX(90deg) translateZ(30px)}.f6{transform:rotateX(-90deg) translateZ(30px)}
+@keyframes spin{0%{transform:rotateX(0) rotateY(0)}100%{transform:rotateX(360deg) rotateY(360deg)}}
+
+/* --- LAYOUT --- */
+.app{max-width:480px;margin:0 auto;height:100%;display:flex;flex-direction:column;opacity:0;transition:opacity .5s}
+.app.loaded{opacity:1}
+.content{flex:1;overflow-y:auto;padding:15px 15px 120px;scroll-behavior:smooth}.content::-webkit-scrollbar{display:none}
+
+/* --- COMPONENTS --- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:20px;margin-bottom:12px;backdrop-filter:blur(16px);box-shadow:0 10px 40px -10px rgba(0,0,0,0.1);position:relative;overflow:hidden;transition:transform 0.2s}
+.btn{background:var(--input-bg);color:var(--text);border:1px solid var(--border);padding:14px;border-radius:18px;font-weight:800;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-head);font-size:13px;text-transform:uppercase;transition:all 0.2s;box-shadow:0 4px 10px rgba(0,0,0,0.05)}
+.btn:active{transform:scale(.95)}.btn-primary{background:var(--primary);color:#fff;border:none;box-shadow:0 4px 15px var(--primary-glow)}
+.btn-sm{padding:8px 14px;font-size:11px;width:auto;border-radius:12px}
+.currency-pill{background:var(--input-bg);border:1px solid var(--border);padding:6px 12px;border-radius:20px;font-size:11px;display:flex;align-items:center;gap:6px;font-weight:700}
+.nav-bar{display:flex;gap:8px;margin-bottom:15px;overflow-x:auto;padding-bottom:5px}
+.nav-tab{padding:8px 16px;border-radius:20px;background:var(--input-bg);color:var(--text-muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s}
+.nav-tab.active{background:var(--primary);color:#fff;box-shadow:0 4px 10px var(--primary-glow)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.item-box{background:var(--input-bg);border:1px solid var(--border);padding:12px;border-radius:20px;text-align:center;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:0.2s}
+.item-box:active{transform:scale(.95)}
+
+.dock-container{position:fixed;bottom:20px;left:0;width:100%;display:flex;justify-content:center;z-index:100;pointer-events:none}
+.dock{background:var(--dock-bg);backdrop-filter:blur(20px);padding:14px 30px;border-radius:30px;display:flex;gap:30px;border:1px solid var(--border);pointer-events:auto;box-shadow:0 15px 40px rgba(0,0,0,.1)}
+.dock i{font-size:22px;color:var(--text-muted);transition:.3s;cursor:pointer;width:40px;text-align:center}
+.dock i.active{color:var(--primary);transform:translateY(-8px) scale(1.2)}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:.3s;backdrop-filter:blur(5px)}
+.overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--modal-bg);width:90%;max-width:380px;padding:25px;border-radius:32px;border:1px solid var(--border);text-align:center;transform:scale(.95) translateY(10px);transition:transform .4s cubic-bezier(.34, 1.56, 0.64, 1);max-height:85vh;overflow-y:auto}
+.overlay.open .modal{transform:scale(1) translateY(0)}
+
+#toastContainer{position:fixed;top:15px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{background:rgba(15,23,42,.95);padding:12px 20px;border-radius:50px;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;animation:slideDown .3s;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(10px)}
+@keyframes slideDown{from{transform:translateY(-30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.hidden{display:none!important}
+
+/* --- SPINNER --- */
+.wheel-container{position:relative;width:220px;height:220px;margin:30px auto}
+.wheel{width:100%;height:100%;border-radius:50%;border:6px solid var(--card);box-shadow:0 10px 30px rgba(0,0,0,0.2);transition:transform 4s cubic-bezier(0.1, 0, 0.2, 1);position:relative;overflow:hidden;background:conic-gradient(#f43f5e 0deg 45deg, #f59e0b 45deg 90deg, #10b981 90deg 135deg, #3b82f6 135deg 180deg, #8b5cf6 180deg 225deg, #ec4899 225deg 270deg, #ef4444 270deg 315deg, #6366f1 315deg 360deg)}
+.wheel-arrow{position:absolute;top:-15px;left:50%;transform:translateX(-50%) rotate(180deg);width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:24px solid #fff;z-index:5;filter:drop-shadow(0 -2px 2px rgba(0,0,0,0.2))}
+.wheel-label{position:absolute;top:50%;left:50%;transform-origin:0 0;font-size:10px;font-weight:800;color:white;text-shadow:0 1px 2px rgba(0,0,0,0.5);width:100px;text-align:right;padding-right:20px;pointer-events:none}
+
+.cal-day{background:var(--input-bg);padding:10px 5px;border-radius:12px;font-size:10px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0.7}
+.cal-day.active{opacity:1;border-color:var(--primary);background:rgba(79,70,229,0.1);transform:scale(1.05)}
+.cal-day.claimed{background:var(--success);color:white;border-color:var(--success);opacity:1}
+
+.countdown-box{display:flex;gap:10px;justify-content:center;margin-top:10px}
+.cd-unit{background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;min-width:40px}
+.cd-val{font-size:16px;font-weight:800}.cd-lbl{font-size:9px;opacity:0.8;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="toastContainer"></div><div class="bg-fx"></div>
+
+<div class="splash" id="splash">
+    <div class="cube-wrap"><div class="cube"><div class="face f1">G</div><div class="face f2">?</div><div class="face f3">!</div><div class="face f4">#</div><div class="face f5"></div><div class="face f6"></div></div></div>
+    <h1 style="color:#fff;letter-spacing:4px;font-weight:900;font-size:32px;text-shadow:0 5px 15px rgba(0,0,0,0.3)">GUESS IT!</h1>
+    <div style="color:rgba(255,255,255,0.8);font-size:12px;margin-top:5px;font-family:var(--font-head);">v1.3.41E</div>
+</div>
+
+<div class="app" id="app">
+  <div style="padding:15px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-family:var(--font-head);font-weight:800;font-size:18px"><i class="fa-solid fa-cube" style="color:var(--primary)"></i> GUESS IT!</div>
+      <div style="display:flex;gap:8px;align-items:center">
+          <div class="currency-pill"><i class="fa-solid fa-coins" style="color:var(--gold)"></i> <span id="uiCoins">0</span></div>
+          <div class="currency-pill"><i class="fa-regular fa-gem" style="color:var(--gem)"></i> <span id="uiGems">0</span></div>
+          <div class="btn-sm" style="padding:6px 10px" onclick="toggleAudio()"><i id="audioIcon" class="fa-solid fa-volume-xmark"></i></div>
+      </div>
+  </div>
+
+  <div class="content">
+      <div id="tab-home" class="tab-view">
+          <div class="card" style="background:linear-gradient(135deg,#f43f5e,#be185d);color:#fff;border:none;text-align:center">
+              <div style="font-size:10px;background:rgba(255,255,255,.25);width:fit-content;padding:4px 8px;border-radius:6px;font-weight:700;margin:0 auto 10px">LIVE EVENT</div>
+              <h3 style="font-family:var(--font-head);font-size:22px">NEW YEAR BLAST</h3>
+              <div style="font-size:11px;opacity:.9">Ends Jan 5 • 4:00 AM</div>
+              <div class="countdown-box" id="eventCountdown"></div>
+          </div>
+
+          <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                 <div style="display:flex;flex-direction:column;">
+                     <span style="font-size:11px;color:var(--text-muted);font-weight:600">LEVEL</span>
+                     <div style="font-weight:800;font-size:24px"><span id="homeLvl">1</span></div>
+                 </div> 
+                 <button class="btn btn-primary" style="width:auto;padding:10px 28px" onclick="startGame('classic');sfx('click')"><i class="fa-solid fa-play"></i> PLAY</button>
+              </div>
+              <div style="width:100%;height:6px;background:var(--input-bg);border-radius:10px;margin-top:10px;overflow:hidden"><div id="homeXpBar" style="height:100%;background:var(--primary);width:0%;transition:width .5s"></div></div>
+          </div>
+          
+          <h3 style="margin:25px 0 10px">Missions</h3>
+          <div class="nav-bar">
+              <div class="nav-tab active" onclick="setMissionTab('daily',this);sfx('click')">Daily</div>
+              <div class="nav-tab" onclick="setMissionTab('lifetime',this);sfx('click')">Lifetime</div>
+          </div>
+          <div id="missionList" class="stagger-anim"></div>
+      </div>
+
+      <div id="tab-shop" class="tab-view hidden">
+          <h2 style="font-family:var(--font-head);margin-bottom:15px">Shop</h2>
+          <div class="nav-bar">
+              <div class="shop-tab-btn active nav-tab" onclick="setShopTab('items',this);sfx('click')">Items</div>
+              <div class="shop-tab-btn nav-tab" onclick="setShopTab('frames',this);sfx('click')">Frames</div>
+          </div>
+          
+          <div class="card" style="margin-bottom:20px;text-align:center">
+              <div style="font-size:12px;font-weight:700;margin-bottom:5px">DAILY REWARDS</div>
+              <div class="grid-3" style="margin-bottom:10px">
+                   <button class="btn" style="padding:10px" onclick="openModal('calendarModal');sfx('click')"><i class="fa-solid fa-calendar"></i> Calendar</button>
+                   <button class="btn" style="padding:10px" onclick="claimMysteryBox();sfx('click')"><i class="fa-solid fa-box-open"></i> Mystery Box</button>
+                   <button class="btn" style="padding:10px" onclick="openModal('spinnerModal');sfx('click')"><i class="fa-solid fa-dharmachakra"></i> Spin</button>
+              </div>
+              <div id="nextRewardTimer" style="font-size:10px;color:var(--text-muted)">Next in: --:--:--</div>
+          </div>
+
+          <div id="shop-items" class="shop-section grid-2 stagger-anim"></div>
+          <div id="shop-frames" class="shop-section hidden grid-2 stagger-anim"></div>
+      </div>
+      
+      <div id="tab-profile" class="tab-view hidden">
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px"><div class="btn-sm" style="background:var(--card)" onclick="openModal('settingsModal');sfx('click')"><i class="fa-solid fa-gear"></i></div></div>
+          <div class="card" style="text-align:center;padding-bottom:25px">
+              <div style="position:relative;display:inline-block;width:100px;height:100px;margin-bottom:10px">
+                  <div id="profileFrame" style="position:absolute;inset:-8px;border-radius:50%;z-index:2;pointer-events:none"></div>
+                  <img id="profileAvatar" src="" onerror="this.src='https://ui-avatars.com/api/?name=User&background=random'" style="width:100%;height:100%;border-radius:50%;border:4px solid var(--border);background:#fff">
+              </div>
+              <h2 style="font-size:24px;margin-bottom:2px" id="profileName">Guest</h2>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:10px">v1.3.41E</div>
+              <button class="btn btn-sm" style="width:auto;margin:15px auto" onclick="openEditProfile();sfx('click')">Edit Profile</button>
+          </div>
+      </div>
+  </div>
+
+  <div class="dock-container"><div class="dock"><i class="fa-solid fa-house active" onclick="switchTab('home',this);sfx('click')"></i><i class="fa-solid fa-store" onclick="switchTab('shop',this);sfx('click')"></i><i class="fa-solid fa-user" onclick="switchTab('profile',this);sfx('click')"></i></div></div>
+</div>
+
+<div class="overlay" id="gameModal">
+    <div class="modal" style="width:100%;height:100%;max-width:none;border-radius:0;padding:20px;display:flex;flex-direction:column;justify-content:center">
+        <div style="position:absolute;top:15px;right:15px;padding:10px" onclick="endGame()"><i class="fa-solid fa-xmark" style="font-size:24px"></i></div>
+        <div style="width:260px;height:260px;background:#fff;border-radius:30px;padding:30px;box-shadow:0 20px 50px rgba(0,0,0,.1);margin:0 auto 30px;display:flex;align-items:center;justify-content:center">
+            <img id="gameImg" style="width:100%;height:100%;object-fit:contain;display:none">
+            <div id="gameImgFallback" class="hidden" style="font-weight:900;color:#ccc;text-align:center">LOADING...</div>
+        </div>
+        <input type="text" id="gInput" style="width:100%;padding:20px;border-radius:20px;border:2px solid var(--border);text-align:center;font-size:20px;font-weight:800;text-transform:uppercase;outline:none" placeholder="GUESS..." autocomplete="off">
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:20px;">
+             <div class="item-box" style="width:50px;height:50px;" onclick="usePowerUp('hint')"><i class="fa-solid fa-lightbulb"></i><span id="qty-hint" style="font-size:9px">0</span></div>
+             <div class="item-box" style="width:50px;height:50px;" onclick="usePowerUp('freeze')"><i class="fa-solid fa-snowflake"></i><span id="qty-freeze" style="font-size:9px">0</span></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:15px;padding:16px;font-size:16px" onclick="submitGuess();sfx('click')">SUBMIT</button>
+    </div>
+</div>
+
+<div class="overlay" id="spinnerModal"><div class="modal"><h3>Lucky Spin</h3>
+    <div class="wheel-container"><div class="wheel-arrow"></div><div id="theWheel" class="wheel"></div></div>
+    <button class="btn btn-primary" id="spinBtn" onclick="spinWheel();sfx('click')">SPIN NOW</button>
+    <button class="btn" style="margin-top:10px" onclick="closeModal('spinnerModal')">Close</button>
+</div></div>
+
+<div class="overlay" id="calendarModal"><div class="modal"><h3>7 Day Rewards</h3><div class="grid-2" id="calGrid" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-top:15px"></div><button class="btn btn-primary" style="margin-top:20px" onclick="claimDailyCal();sfx('click')">Claim</button><button class="btn" style="margin-top:10px" onclick="closeModal('calendarModal')">Close</button></div></div>
+
+<div class="overlay" id="setupModal"><div class="modal"><h3>Edit Profile</h3>
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin:20px 0;">
+        <button class="btn-sm" onclick="changeAvatar(-1);sfx('click')"><i class="fa-solid fa-chevron-left"></i></button>
+        <img id="setupAvatarPreview" src="" style="width:80px;height:80px;border-radius:50%;border:2px solid var(--primary)">
+        <button class="btn-sm" onclick="changeAvatar(1);sfx('click')"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+    <input id="setupName" style="width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;text-align:center" placeholder="Username">
+    <div id="frameSelector" class="grid-3" style="max-height:150px;overflow-y:auto;margin-top:15px"></div>
+    <button class="btn btn-primary" style="margin-top:20px" onclick="saveProfile();sfx('success')">Save</button>
+    <button class="btn" style="margin-top:10px" onclick="closeModal('setupModal')">Cancel</button>
+</div></div>
+
+<div class="overlay" id="settingsModal"><div class="modal"><h3>Settings</h3><button class="btn" onclick="toggleDarkMode();sfx('click')">Toggle Dark Mode</button><button class="btn" style="margin-top:10px" onclick="closeModal('settingsModal')">Close</button></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const firebaseConfig={apiKey:"AIzaSyAbKxS6HUPn1c632CMPzvLQiJBw57vqflQ",authDomain:"studio-4144954497-c3ea9.firebaseapp.com",projectId:"studio-4144954497-c3ea9"};
+const AVATARS=['Felix','Aneka','Zack','Midnight','Luna','Jack','Leo','Bella','Shadow','Pixel','Rocky','Ginger','Tiger','Boots','Kiki','Milo','Max','Sam','Lola'];
+const ITEMS=[
+    {id:'hint',n:'Hint',t:'c',c:50,cur:'coins',i:'fa-lightbulb'},
+    {id:'freeze',n:'Freeze',t:'c',c:100,cur:'coins',i:'fa-snowflake'},
+    {id:'xp_boost',n:'XP Boost',t:'c',c:150,cur:'coins',i:'fa-arrow-up'},
+    {id:'th_gold',n:'Gold Theme',t:'th',c:500,cur:'coins',v:'Gold',i:'fa-palette'},
+    {id:'th_dark',n:'Dark',t:'th',c:800,cur:'coins',v:'DarkKnight',i:'fa-mask'},
+    {id:'frame_neon',n:'Neon',t:'f',c:500,cur:'coins',css:'border:3px solid #0ff;box-shadow:0 0 10px #0ff'},
+    {id:'frame_gold',n:'Gold',t:'f',c:1000,cur:'coins',css:'border:3px solid #f59e0b;box-shadow:0 0 15px #f59e0b'},
+    {id:'frame_fire',n:'Fire',t:'f',c:1500,cur:'coins',css:'border:3px solid #ef4444;box-shadow:0 0 10px #ef4444'}
+];
+// EXPANDED MISSIONS
+const MISSIONS=[
+    {id:'d1',t:'daily',d:'Play 5 Games',tgt:5,r:50,c:'coins'},
+    {id:'d2',t:'daily',d:'Use 1 Hint',tgt:1,r:20,c:'coins'},
+    {id:'l1',t:'lifetime',d:'Reach Level 5',tgt:5,r:100,c:'coins'},
+    {id:'l2',t:'lifetime',d:'Win 10 Games',tgt:10,r:150,c:'coins'}
+];
+const LOGOS=[{n:'Apple',d:'apple.com'},{n:'Google',d:'google.com'},{n:'Microsoft',d:'microsoft.com'},{n:'Amazon',d:'amazon.com'},{n:'Netflix',d:'netflix.com'},{n:'Facebook',d:'facebook.com'},{n:'Tesla',d:'tesla.com'},{n:'Nike',d:'nike.com'},{n:'Spotify',d:'spotify.com'},{n:'Samsung',d:'samsung.com'}];
+
+// REWARDS
+const CAL_RWDS = [ {t:'coins',v:50}, {t:'coins',v:100}, {t:'hint',v:1}, {t:'coins',v:150}, {t:'gems',v:5}, {t:'coins',v:250}, {t:'gems',v:20} ];
+const SPIN_RWDS = [ {l:'50 <i class="fa-solid fa-coins"></i>',t:'coins',v:50}, {l:'100 <i class="fa-solid fa-coins"></i>',t:'coins',v:100}, {l:'1 HINT',t:'hint',v:1}, {l:'200 <i class="fa-solid fa-coins"></i>',t:'coins',v:200}, {l:'5 GEMS',t:'gems',v:5}, {l:'500 <i class="fa-solid fa-coins"></i>',t:'coins',v:500}, {l:'2 GEMS',t:'gems',v:2}, {l:'10 GEMS',t:'gems',v:10} ];
+
+let state={user:{name:'Guest',uid:null,avatarIdx:0,frame:null,theme:'',setup:false},wallet:{coins:200,gems:0},stats:{lvl:1,xp:0,wins:0,games:0},inv:{},prog:{hint:0},daily:{lastCal:0,lastSpin:0,lastBox:0,streak:0},claimedM:[]};
+let dw={coins:0,gems:0}, tmpAv=0, tmpFr=null, curG=null, curMTab='daily', ac=null;
+
+window.onload=()=>{
+    try{firebase.initializeApp(firebaseConfig);firebase.auth().onAuthStateChanged(u=>{if(u){state.user.uid=u.uid;saveData()}})}catch(e){}
+    loadData();setTimeout(()=>{$('splash').classList.add('hidden');$('app').classList.add('loaded');renderAll()},2500);
+    renderMissions(); renderShop(); initWheel();
+    setInterval(updateTimers, 1000); updateTimers();
+};
+
+function toggleAudio(){ 
+    if(!ac) { ac=new (window.AudioContext||window.webkitAudioContext)(); startBGM(); $('audioIcon').className="fa-solid fa-volume-high"; }
+    else { if(ac.state==='suspended'){ac.resume();$('audioIcon').className="fa-solid fa-volume-high";} else {ac.suspend();$('audioIcon').className="fa-solid fa-volume-xmark";} }
+}
+function startBGM(){
+    const o=ac.createOscillator(); const g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value=100; o.type='triangle'; g.gain.value=0.03;
+    o.start();
+}
+function sfx(t){
+    if(!ac || ac.state==='suspended') return;
+    const o=ac.createOscillator(); const g=ac.createGain(); o.connect(g); g.connect(ac.destination);
+    if(t==='click'){o.frequency.setValueAtTime(400,ac.currentTime);o.frequency.exponentialRampToValueAtTime(600,ac.currentTime+0.1);g.gain.setValueAtTime(0.1,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.1);o.start();o.stop(ac.currentTime+0.1);}
+    if(t==='success'){o.type='sine';o.frequency.setValueAtTime(600,ac.currentTime);o.frequency.setValueAtTime(900,ac.currentTime+0.15);g.gain.setValueAtTime(0.1,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}
+    if(t==='error'){o.type='sawtooth';o.frequency.setValueAtTime(150,ac.currentTime);g.gain.setValueAtTime(0.1,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+0.3);o.start();o.stop(ac.currentTime+0.3);}
+}
+
+function saveData(){localStorage.setItem('guessv1341e',JSON.stringify(state))}
+function loadData(){const d=localStorage.getItem('guessv1341e');if(d)state={...state,...JSON.parse(d)};if(state.user.theme)document.body.setAttribute('data-theme',state.user.theme)}
+function showToast(m,e){const t=document.createElement('div');t.className='toast';t.innerHTML=`<i class="fa-solid ${e?'fa-triangle-exclamation':'fa-check'}" style="color:${e?'#ef4444':'#10b981'}"></i> ${m}`;$('toastContainer').appendChild(t);setTimeout(()=>t.remove(),2600)}
+function openModal(id){$(id).classList.add('open'); if(id==='calendarModal') renderCal(); if(id==='setupModal') openEditProfile();}
+function closeModal(id){$(id).classList.remove('open')}
+function switchTab(id,el){document.querySelectorAll('.tab-view').forEach(t=>t.classList.add('hidden'));$('tab-'+id).classList.remove('hidden');document.querySelectorAll('.dock i').forEach(i=>i.classList.remove('active'));el.classList.add('active')}
+
+function renderAll(){
+    ['Coins','Gems'].forEach(k=>{let l=k.toLowerCase();if(dw[l]!=state.wallet[l]){dw[l]=state.wallet[l];$('ui'+k).innerText=state.wallet[l]}});
+    $('profileName').innerText=state.user.name; $('profileAvatar').src=`https://api.dicebear.com/9.x/adventurer/svg?seed=${AVATARS[state.user.avatarIdx]}`;
+    const f=ITEMS.find(x=>x.id===state.user.frame); $('profileFrame').style.cssText=f?`position:absolute;inset:-8px;border-radius:50%;z-index:2;pointer-events:none;${f.css}`:'';
+    $('homeLvl').innerText=state.stats.lvl; $('homeXpBar').style.width=Math.min((state.stats.xp/(state.stats.lvl*200))*100,100)+'%';
+}
+
+function trackMission(type){
+    if(type==='game') state.stats.games++;
+    if(type==='win') { 
+        state.stats.wins++; state.stats.xp+=100; 
+        if(state.stats.xp>=state.stats.lvl*200){
+            state.stats.xp-=state.stats.lvl*200; state.stats.lvl++; showToast("Level Up!"); sfx('success');
+            // GEM MILESTONE
+            if(state.stats.lvl % 5 === 0) { state.wallet.gems += 5; showToast("Bonus: +5 Gems!"); }
+        } 
+    }
+    if(type==='hint') state.prog.hint = (state.prog.hint||0)+1;
+    saveData(); renderAll(); renderMissions();
+}
+
+function renderMissions(){
+    const d=$('missionList'); d.innerHTML='';
+    MISSIONS.filter(m=>m.t===curMTab).forEach(m=>{
+        let p=0; if(m.id==='l1')p=state.stats.lvl; if(m.id==='d1')p=state.stats.games; if(m.id==='d2')p=state.prog.hint||0; if(m.id==='l2')p=state.stats.wins;
+        let b=state.claimedM.includes(m.id)?'<i class="fa-solid fa-check"></i>':(p>=m.tgt?`<button class="btn btn-sm btn-primary" onclick="claimM('${m.id}')">Claim</button>`:`${p}/${m.tgt}`);
+        d.innerHTML+=`<div style="background:var(--card);padding:10px;border-radius:16px;border:1px solid var(--border);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:12px"><b>${m.d}</b><br><span style="color:var(--text-muted)">${m.r} ${m.c}</span></div><div>${b}</div></div>`;
+    });
+}
+function setMissionTab(t,el){curMTab=t;document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderMissions()}
+function claimM(id){let m=MISSIONS.find(x=>x.id===id);state.wallet[m.c]+=m.r;state.claimedM.push(id);showToast("Claimed!");sfx('success');saveData();renderAll();renderMissions()}
+
+function renderShop(){
+    const iDiv = $('shop-items'), fDiv = $('shop-frames');
+    iDiv.innerHTML=''; fDiv.innerHTML='';
+    ITEMS.forEach(i=>{
+        let own = state.inv[i.id]; let lck = state.wallet[i.cur]<i.c && !own;
+        let cDisp = i.c + ' <i class="fa-solid fa-coins"></i>'; // COIN ICON
+        let h = `<div class="item-box" onclick="buyItem('${i.id}')" style="opacity:${lck?0.7:1}"><i class="fa-solid ${i.i||'fa-star'}" style="font-size:24px;margin-bottom:5px;${i.t==='f'?'display:none':''}"></i>${i.t==='f'?`<div style="width:30px;height:30px;border-radius:50%;margin-bottom:5px;${i.css}"></div>`:''} <div style="font-size:11px;font-weight:700">${i.n}</div><div style="font-size:10px;margin-top:2px">${own?'OWNED':cDisp}</div></div>`;
+        if(i.t==='f') fDiv.innerHTML += h; else iDiv.innerHTML += h;
+    });
+}
+function setShopTab(t,el){document.querySelectorAll('.shop-tab-btn').forEach(b=>b.classList.remove('active'));el.classList.add('active');document.querySelectorAll('.shop-section').forEach(s=>s.classList.add('hidden'));$('shop-'+t).classList.remove('hidden');}
+
+// GAME
+function startGame(m){
+    curG=LOGOS[Math.floor(Math.random()*LOGOS.length)];
+    const img=$('gameImg'); const fb=$('gameImgFallback');
+    img.src=`https://logo.clearbit.com/${curG.d}`; img.style.display='block'; fb.classList.add('hidden');
+    img.onerror = ()=>{ img.style.display='none'; fb.classList.remove('hidden'); img.src=`https://www.google.com/s2/favicons?domain=${curG.d}&sz=128`; img.onerror=()=>{img.style.display='none';fb.classList.remove('hidden');} };
+    $('gInput').value=''; 
+    $('qty-hint').innerText = state.inv['hint'] || 0; $('qty-freeze').innerText = state.inv['freeze'] || 0;
+    openModal('gameModal');
+}
+function submitGuess(){
+    let g=$('gInput').value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+    trackMission('game');
+    if(g===curG.n.toLowerCase().replace(/[^a-z0-9]/g,'')){
+        state.wallet.coins+=50; trackMission('win');
+        saveData(); renderAll(); endGame(); showToast("Correct!"); sfx('success');
+    } else {showToast("Wrong!",true);sfx('error')}
+}
+function usePowerUp(t){
+    if(state.inv[t]>0){
+        state.inv[t]--; if(t==='hint'){ $('gInput').value=curG.n.substr(0,2); trackMission('hint'); }
+        $('qty-'+t).innerText=state.inv[t]; saveData();
+    } else showToast("None left",true);
+}
+function endGame(){closeModal('gameModal')}
+function buyItem(id){
+    let i=ITEMS.find(x=>x.id===id); if(state.inv[id]) return showToast("Already Owned",true);
+    if(state.wallet[i.cur]>=i.c){
+        state.wallet[i.cur]-=i.c; state.inv[id]=1;
+        if(i.t==='f'){state.user.frame=id;showToast("Equipped")} if(i.t==='th'){state.user.theme=i.v;document.body.setAttribute('data-theme',i.v);showToast("Applied")}
+        saveData();renderAll();renderShop();sfx('success');
+    }else {showToast("Need Funds",true);sfx('error')}
+}
+
+// SPINNER & REWARDS
+function initWheel(){
+    const w=$('theWheel');
+    SPIN_RWDS.forEach((r,i)=>{
+        const a = i * 45 + 22.5; const l = document.createElement('div');
+        l.className='wheel-label'; l.innerHTML = r.l; // Using innerHTML for icons
+        l.style.transform = `translate(-50%, -50%) rotate(${a}deg) translate(80px)`;
+        w.appendChild(l);
+    });
+}
+function spinWheel(){
+    if(Date.now()-state.daily.lastSpin < 86400000) return showToast("Wait for timer",true);
+    state.daily.lastSpin = Date.now();
+    const idx = Math.floor(Math.random()*8);
+    $('theWheel').style.transform = `rotate(${1800 + (360 - (idx * 45))}deg)`;
+    $('spinBtn').disabled=true;
+    setTimeout(()=>{
+        const r = SPIN_RWDS[idx];
+        if(r.t==='hint') state.inv['hint'] = (state.inv['hint']||0)+1; else state.wallet[r.t] += r.v;
+        showToast(`Won!`); saveData(); renderAll(); $('spinBtn').disabled=false; closeModal('spinnerModal');
+    }, 4500);
+}
+
+function renderCal(){
+    const g=$('calGrid'); g.innerHTML='';
+    for(let i=0;i<7;i++){
+        let s = i < state.daily.streak ? 'claimed' : (i===state.daily.streak && Date.now()-state.daily.lastCal>86400000 ? 'active' : '');
+        let r = CAL_RWDS[i];
+        g.innerHTML += `<div class="cal-day ${s}"><div>Day ${i+1}</div><i class="fa-solid fa-${r.t==='coins'?'coins':(r.t==='hint'?'lightbulb':'gem')}"></i><div>${r.v}</div></div>`;
+    }
+}
+function claimDailyCal(){
+    if(Date.now()-state.daily.lastCal>86400000){
+        let r = CAL_RWDS[state.daily.streak];
+        if(r.t==='hint') state.inv['hint']=(state.inv['hint']||0)+r.v; else state.wallet[r.t]+=r.v;
+        state.daily.streak = (state.daily.streak+1)%7; state.daily.lastCal=Date.now();
+        saveData(); renderAll(); renderCal(); showToast("Claimed!"); sfx('success');
+    } else showToast("Wait for tomorrow",true);
+}
+function claimMysteryBox(){const n=Date.now();if(n-state.daily.lastBox>86400000){state.daily.lastBox=n;state.wallet.coins+=100;showToast("+100 Coins");saveData();renderAll()}else {showToast("Wait 24h",true);sfx('error')}}
+
+function updateTimers(){
+    const diff = 86400000 - (Date.now() - state.daily.lastBox); // Using Mystery Box as main timer
+    if(diff > 0) {
+        let h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000), s=Math.floor((diff%60000)/1000);
+        $('nextRewardTimer').innerText = `Next Reward: ${h}h ${m}m ${s}s`;
+    } else $('nextRewardTimer').innerText = "Reward Ready!";
+    
+    // Event Countdown
+    const evtDiff = new Date('2026-01-05T04:00:00').getTime() - new Date().getTime();
+    if(evtDiff > 0) {
+        let d=Math.floor(evtDiff/86400000), h=Math.floor((evtDiff%86400000)/3600000), m=Math.floor((evtDiff%3600000)/60000);
+        $('eventCountdown').innerHTML = `<div class="cd-unit"><div class="cd-val">${d}</div><div class="cd-lbl">Days</div></div><div class="cd-unit"><div class="cd-val">${h}</div><div class="cd-lbl">Hrs</div></div><div class="cd-unit"><div class="cd-val">${m}</div><div class="cd-lbl">Min</div></div>`;
+    } else $('eventCountdown').innerHTML = "EVENT ENDED";
+}
+
+function openEditProfile(){
+    tmpAv=state.user.avatarIdx; $('setupName').value=state.user.name; $('setupAvatarPreview').src=`https://api.dicebear.com/9.x/adventurer/svg?seed=${AVATARS[tmpAv]}`;
+    let d=$('frameSelector'); d.innerHTML='<div class="item-box" onclick="tmpFr=null">None</div>';
+    ITEMS.filter(x=>x.t==='f' && state.inv[x.id]).forEach(i=>d.innerHTML+=`<div class="item-box" onclick="tmpFr='${i.id}'">${i.n}</div>`);
+    openModal('setupModal');
+}
+function changeAvatar(d){tmpAv=(tmpAv+d+AVATARS.length)%AVATARS.length;$('setupAvatarPreview').src=`https://api.dicebear.com/9.x/adventurer/svg?seed=${AVATARS[tmpAv]}`}
+function saveProfile(){state.user.name=$('setupName').value;state.user.avatarIdx=tmpAv;state.user.frame=tmpFr;state.user.setup=true;saveData();closeModal('setupModal');renderAll()}
+function toggleDarkMode(){document.body.classList.toggle('dark-mode')}
+</script></body></html>
